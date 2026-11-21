@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>卡密后台 · Cloudflare</title>
+<style>
+:root{--bg:#12141a;--card:#1b1e26;--line:#2a2f3a;--text:#e6e8ee;--muted:#8b91a3;--accent:#4f8cff;--ok:#37c871;--warn:#e8b13a;--err:#f0564b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:17px}
+header .u{color:var(--muted);font-size:13px}
+main{max-width:1000px;margin:0 auto;padding:20px}
+.tabs{display:flex;gap:8px;margin-bottom:20px}
+.tab{padding:9px 16px;border-radius:8px;background:var(--card);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.panel{display:none}
+.panel.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 12px;font-size:15px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}
+.stat{background:var(--bg);border-radius:10px;padding:14px;text-align:center}
+.stat .n{font-size:24px;font-weight:600}
+.stat .l{color:var(--muted);font-size:12px;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:500}
+input,select,textarea,button{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{width:100%;resize:vertical;min-height:60px}
+button{background:var(--accent);border:none;cursor:pointer;color:#fff}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+button.sm{padding:4px 9px;font-size:12px;border-radius:6px}
+button.danger{background:var(--err)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>div{flex:1;min-width:120px}
+label{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+.badge{padding:2px 8px;border-radius:10px;font-size:11px}
+.badge.ok{background:#16361f;color:var(--ok)}
+.badge.err{background:#3a1b1a;color:var(--err)}
+#login{max-width:340px;margin:60px auto}
+#login input{width:100%;margin-bottom:12px}
+.flash{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:var(--card);border:1px solid var(--line)}
+.flash.ok{border-color:var(--ok)}.flash.err{border-color:var(--err)}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.empty{color:var(--muted);text-align:center;padding:30px}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h2 style="text-align:center">卡密后台</h2>
+    <div style="color:var(--muted);font-size:12px;text-align:center;margin-bottom:16px">Cloudflare 版 · R2 存储</div>
+    <input id="lu" placeholder="用户名">
+    <input id="lp" type="password" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <button style="width:100%" onclick="doLogin()">登录</button>
+    <div id="lmsg" style="color:var(--err);font-size:12px;margin-top:10px;text-align:center"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+<header>
+  <h1>卡密后台</h1>
+  <div><span class="u" id="uname"></span> <button class="sm ghost" onclick="doLogout()">退出</button></div>
+</header>
+<main>
+  <div class="tabs">
+    <div class="tab on" data-p="overview">概览</div>
+    <div class="tab" data-p="apps">应用管理</div>
+    <div class="tab" data-p="cards">卡密管理</div>
+    <div class="tab" data-p="settings">设置</div>
+  </div>
+
+  <!-- 概览 -->
+  <div class="panel on" id="p-overview">
+    <div class="stats" id="stats"></div>
+    <div class="card"><h2>最近卡密</h2><div id="recent"></div></div>
+  </div>
+
+  <!-- 应用管理 -->
+  <div class="panel" id="p-apps">
+    <div class="card">
+      <h2>创建应用</h2>
+      <div class="row"><div><label>应用名</label><input id="newapp" placeholder="例如 我的游戏"></div>
+      <button onclick="createApp()">创建</button></div>
+    </div>
+    <div class="card"><h2>应用列表</h2><div id="applist"></div></div>
+  </div>
+
+  <!-- 卡密管理 -->
+  <div class="panel" id="p-cards">
+    <div class="card">
+      <h2>生成卡密</h2>
+      <div class="row">
+        <div><label>应用</label><select id="gapp"></select></div>
+        <div><label>到期日期</label><input id="gexp" placeholder="20261231" value="20261231"></div>
+        <div><label>数量</label><input id="gqty" type="number" value="10" min="1" max="100"></div>
+        <button onclick="genCards()">生成</button>
+      </div>
+      <div id="genout" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h2>卡密列表</h2>
+      <div class="row" style="margin-bottom:12px">
+        <div><label>应用</label><select id="capp" onchange="loadCards()"></select></div>
+        <div><label>关键字</label><input id="ckw" placeholder="卡密/设备" oninput="loadCards()"></div>
+      </div>
+      <div id="cardlist"></div>
+    </div>
+  </div>
+
+  <!-- 设置 -->
+  <div class="panel" id="p-settings">
+    <div class="card"><h2>修改密码</h2>
+      <div class="row">
+        <div><label>原密码</label><input id="opw" type="password"></div>
+        <div><label>新密码</label><input id="npw" type="password"></div>
+        <div><label>确认新密码</label><input id="npw2" type="password"></div>
+        <button onclick="changePw()">修改</button>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+let TOKEN = localStorage.getItem("cfcard_token") || "";
+let ADMIN = localStorage.getItem("cfcard_user") || "";
+let APPS = [];
+const $ = id => document.getElementById(id);
+
+function flash(msg, ok) { const d = document.createElement("div"); d.className = "flash " + (ok ? "ok" : "err"); d.textContent = msg; return d; }
+
+async function api(params) {
+  const fd = new FormData();
+  Object.entries(params).forEach(([k, v]) => fd.append(k, v));
+  fd.append("token", TOKEN);
+  const r = await fetch("/api/admin", { method: "POST", body: fd });
+  return r.json();
+}
+
+function showApp(on) {
+  $("login").style.display = on ? "none" : "block";
+  $("app").style.display = on ? "block" : "none";
+  if (on) { $("uname").textContent = ADMIN; switchTab("overview"); }
+}
+
+async function doLogin() {
+  const fd = new FormData();
+  fd.append("act", "login"); fd.append("username", $("lu").value); fd.append("password", $("lp").value);
+  const r = await (await fetch("/api/admin", { method: "POST", body: fd })).json();
+  if (!r.ok) { $("lmsg").textContent = r.msg || "登录失败"; return; }
+  TOKEN = r.token; ADMIN = r.username;
+  localStorage.setItem("cfcard_token", TOKEN); localStorage.setItem("cfcard_user", ADMIN);
+  showApp(true);
+}
+function doLogout() { api({ act: "logout" }); localStorage.clear(); TOKEN = ""; showApp(false); }
+
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => switchTab(t.dataset.p));
+function switchTab(p) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.p === p));
+  document.querySelectorAll(".panel").forEach(x => x.classList.toggle("on", x.id === "p-" + p));
+  if (p === "overview") loadOverview();
+  if (p === "apps") loadApps();
+  if (p === "cards") { fillAppSelects().then(loadCards); }
+}
+
+async function loadOverview() {
+  const r = await api({ act: "overview" });
+  if (!r.ok) return logoutIfExpired(r);
+  const s = r.stats;
+  $("stats").innerHTML = [
+    ["应用", s.apps], ["已封应用", s.apps_banned], ["卡密总数", s.cards],
+    ["已绑定", s.bound], ["未绑定", s.unbound], ["已过期", s.expired], ["已封卡密", s.cards_banned]
+  ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  $("recent").innerHTML = r.recent.length ? table(
+    ["卡密", "应用", "设备", "状态", "到期"],
+    r.recent.map(c => [mono(c.card_key), c.app_id, c.device_id || "—",
+      c.banned ? badge("已封禁", "err") : (c.bind_date ? badge("已绑定", "ok") : "未绑定"), c.expiry_date])
+  ) : `<div class="empty">暂无卡密</div>`;
+}
+
+async function loadApps() {
+  const r = await api({ act: "apps" });
+  if (!r.ok) return logoutIfExpired(r);
+  APPS = r.apps;
+  $("applist").innerHTML = APPS.length ? table(
+    ["应用ID", "名称", "卡密", "状态", "操作"],
+    APPS.map(a => [mono(a.app_id), a.app_name, a.card_count,
+      a.status ? badge("正常", "ok") : badge("已封禁", "err"),
+      `<button class="sm ghost" onclick="toggleApp('${a.app_id}',${a.status})">${a.status ? "封禁" : "解封"}</button>
+       <button class="sm ghost" onclick="editNotice('${a.app_id}')">公告</button>
+       <button class="sm ghost" onclick="editSig('${a.app_id}')">签名</button>
+       <button class="sm danger" onclick="delApp('${a.app_id}')">删除</button>`])
+  ) : `<div class="empty">还没有应用，先创建一个</div>`;
+}
+async function createApp() {
+  const name = $("newapp").value.trim();
+  if (!name) return;
+  const r = await api({ act: "create_app", app_name: name });
+  flashInto($("applist"), r);
+  $("newapp").value = ""; loadApps();
+}
+async function toggleApp(id, st) { await api({ act: st ? "ban_app" : "unban_app", app_id: id }); loadApps(); }
+async function delApp(id) { if (confirm("删除应用及其所有卡密？")) { await api({ act: "delete_app", app_id: id }); loadApps(); } }
+async function editNotice(id) {
+  const n = prompt("输入公告（留空清除）：", (APPS.find(a => a.app_id === id) || {}).notice || "");
+  if (n === null) return;
+  const r = await api({ act: "set_notice", app_id: id, notice: n });
+  flashInto($("applist"), r);
+}
+async function editSig(id) {
+  const a = APPS.find(x => x.app_id === id) || {};
+  const md5 = prompt("MD5 指纹（留空不校验）：", a.sig_md5 || "") || "";
+  if (md5 === null) return;
+  const sha1 = prompt("SHA1 指纹：", a.sig_sha1 || "") || "";
+  const sha256 = prompt("SHA256 指纹：", a.sig_sha256 || "") || "";
+  const r = await api({ act: "set_signature", app_id: id, sig_md5: md5, sig_sha1: sha1, sig_sha256: sha256 });
+  flashInto($("applist"), r);
+}
+
+async function fillAppSelects() {
+  const r = await api({ act: "apps" });
+  APPS = r.apps || [];
+  const opts = APPS.map(a => `<option value="${a.app_id}">${a.app_name} (${a.app_id})</option>`).join("");
+  $("gapp").innerHTML = opts; $("capp").innerHTML = `<option value="">全部应用</option>` + opts;
+}
+
+async function genCards() {
+  const r = await api({ act: "generate_cards", app_id: $("gapp").value, expiry_date: $("gexp").value, quantity: $("gqty").value });
+  $("genout").innerHTML = "";
+  if (!r.ok) { $("genout").appendChild(flash(r.msg, false)); return; }
+  $("genout").appendChild(flash(r.msg, true));
+  const box = document.createElement("div"); box.className = "card";
+  box.innerHTML = `<div class="mono" style="white-space:pre-wrap;user-select:all">${r.keys.join("\n")}</div>`;
+  $("genout").appendChild(box);
+  loadCards();
+}
+
+async function loadCards() {
+  const r = await api({ act: "cards", app_id: $("capp").value, keyword: $("ckw").value });
+  if (!r.ok) return logoutIfExpired(r);
+  $("cardlist").innerHTML = r.cards.length ? table(
+    ["卡密", "应用", "设备", "状态", "到期", "操作"],
+    r.cards.map(c => [mono(c.card_key), c.app_id, c.device_id || "—",
+      c.banned ? badge("已封禁", "err") : (c.bind_date ? badge("已绑定", "ok") : badge("未绑定", "")),
+      c.expiry_date,
+      `<button class="sm ghost" onclick="cardAct('ban_card','${c.app_id}','${c.card_key}')">封禁</button>
+       <button class="sm ghost" onclick="cardAct('unbind_card','${c.app_id}','${c.card_key}')">解绑</button>
+       <button class="sm ghost" onclick="editExp('${c.app_id}','${c.card_key}','${c.expiry_date}')">改期</button>
+       <button class="sm danger" onclick="cardAct('delete_card','${c.app_id}','${c.card_key}')">删除</button>`])
+  ) : `<div class="empty">没有卡密</div>`;
+}
+async function cardAct(act, appId, key) {
+  if (act === "delete_card" && !confirm("删除这张卡密？")) return;
+  const r = await api({ act, app_id: appId, card_key: key });
+  flashInto($("cardlist"), r); loadCards();
+}
+async function editExp(appId, key, cur) {
+  const n = prompt("新到期日期（YYYYMMDD）：", cur.replace(/-/g, ""));
+  if (!n) return;
+  const r = await api({ act: "update_expiry", app_id: appId, card_key: key, new_expiry: n });
+  flashInto($("cardlist"), r); loadCards();
+}
+async function changePw() {
+  const r = await api({ act: "change_password", old_password: $("opw").value, new_password: $("npw").value, new_password2: $("npw2").value });
+  alert(r.msg || (r.ok ? "成功" : "失败"));
+  $("opw").value = $("npw").value = $("npw2").value = "";
+}
+
+function logoutIfExpired(r) { if (r.msg && /登录/.test(r.msg)) { doLogout(); } }
+function flashInto(container, r) { container.insertBefore(flash(r.msg || (r.ok ? "成功" : "失败"), r.ok), container.firstChild); }
+function table(heads, rows) {
+  return `<table><thead><tr>${heads.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("") + `</tbody></table>`;
+}
+function mono(s) { return `<span class="mono">${s}</span>`; }
+function badge(t, cls) { return `<span class="badge ${cls}">${t}</span>`; }
+
+if (TOKEN) showApp(true); else showApp(false);
+</script>
+</body>
+</html>
