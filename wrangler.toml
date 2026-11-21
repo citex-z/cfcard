@@ -1,9 +1,12 @@
-name = "cfcard-d1"
+name = "cfcard"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "."
 
-# D1 数据库绑定（本地 dev 用；线上在 Pages 设置里绑定 DB）
-[[d1_databases]]
-binding = "DB"
-database_name = "cfcard"
-database_id = "00000000-0000-0000-0000-000000000000"
+# D1 数据库绑定：在 Cloudflare Pages 项目
+#   Settings → Functions → D1 database bindings 里添加
+#   Variable name 填 DB，选择 cfcard 数据库
+#
+# 这里不要写 database_id（填占位符会导致部署报
+#   Error 8000022: Invalid database UUID）。
+# 如需本地开发：wrangler pages dev 时用
+#   --d1 DB=<真实的 database_id>  或在项目设置里绑定。
