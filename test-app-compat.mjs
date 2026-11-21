@@ -57,6 +57,11 @@ let TOKEN;
   TOKEN = r.token;
   const bad = await j(await onRequestPost({ request: urlReq("/api/admin", { act: "login", username: "admin", password: "x" }), env }));
   check("错误密码被拒", bad.ok === false);
+  // 地址拼错（比如 /api/admin/api/admin）时也要返回 JSON，不能 404，
+  // 否则 App 端只会看到 "HTTP 404" 而拿不到具体原因
+  const wrong = await j(await onRequestPost({
+    request: urlReq("/api/admin/api/admin", { act: "login", username: "admin", password: "123456" }), env }));
+  check("路径拼错也返回 JSON 错误", wrong.ok === false && /未知接口/.test(wrong.msg), wrong.msg);
 }
 
 console.log("\n[2] urlencoded 管理操作");
