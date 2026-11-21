@@ -1,9 +1,0 @@
-name = "cfcard"
-compatibility_date = "2024-01-01"
-pages_build_output_dir = "."
-
-# D1 数据库绑定：随部署自动生效，无需在控制台手动添加
-[[d1_databases]]
-binding = "DB"
-database_name = "cfcard"
-database_id = "29b900d6-9290-47f7-b9e8-6d137ddb8b92"
