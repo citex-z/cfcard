@@ -97,9 +97,15 @@ async function handleCheck(request, env) {
   const app = await DB(env).prepare("SELECT sig_md5, sig_sha1, sig_sha256 FROM apps WHERE app_id = ?").bind(app_id).first();
   if (!app) return json({ status: "ok" });
   if (!(app.sig_md5 || app.sig_sha1 || app.sig_sha256)) return json({ status: "ok" });
+  if (!sig_cert) return json({ status: "ok" });   // 取不到证书时放行，不能误判成破解
 
   const b64 = sig_cert.replace(/-/g, "+").replace(/_/g, "/");
-  const certBytes = Uint8Array.from(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")), c => c.charCodeAt(0));
+  let certBytes;
+  try {
+    certBytes = Uint8Array.from(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")), c => c.charCodeAt(0));
+  } catch (e) {
+    return json({ status: "ok" });   // 非法 base64 同理：放行而不是 500
+  }
   const md5fp = await md5Hex(certBytes);
   const sha1 = await digestHex("SHA-1", certBytes);
   const sha256 = await digestHex("SHA-256", certBytes);
