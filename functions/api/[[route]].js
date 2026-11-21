@@ -24,50 +24,17 @@ const TOKEN_TTL = 86400 * 30;
 let schemaReady = false;
 async function ensureSchema(env) {
   if (schemaReady) return;
-  // 注意：D1 的 batch() 只接受 {sql, params} 对象，不能直接传字符串
-  const statements = [
-    `CREATE TABLE IF NOT EXISTS admin (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       username TEXT NOT NULL UNIQUE,
-       password_hash TEXT NOT NULL,
-       salt TEXT NOT NULL,
-       created_at TEXT DEFAULT (datetime('now'))
-     )`,
-    `CREATE TABLE IF NOT EXISTS apps (
-       app_id TEXT PRIMARY KEY,
-       app_name TEXT NOT NULL,
-       status INTEGER DEFAULT 1,
-       notice TEXT DEFAULT '',
-       sig_md5 TEXT DEFAULT '',
-       sig_sha1 TEXT DEFAULT '',
-       sig_sha256 TEXT DEFAULT '',
-       created_at TEXT DEFAULT (datetime('now'))
-     )`,
-    `CREATE TABLE IF NOT EXISTS bindings (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       app_id TEXT NOT NULL DEFAULT '',
-       card_key TEXT NOT NULL,
-       device_id TEXT DEFAULT '',
-       bind_date TEXT DEFAULT '',
-       banned INTEGER DEFAULT 0,
-       expiry_date TEXT NOT NULL,
-       created_at TEXT DEFAULT (datetime('now'))
-     )`,
-    `CREATE TABLE IF NOT EXISTS api_tokens (
-       token_hash TEXT PRIMARY KEY,
-       username TEXT NOT NULL,
-       created_at INTEGER NOT NULL,
-       expires_at INTEGER NOT NULL
-     )`,
-    `CREATE INDEX IF NOT EXISTS idx_bindings_app ON bindings(app_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_bindings_key ON bindings(app_id, card_key)`,
-  ];
-  // D1 的 exec() 一次只认一条语句，逐条执行
-  for (const sql of statements) {
-    await DB(env).exec(sql);
+  // 表结构在建表.sql 里，已在 D1 控制台手动执行过。
+  // 这里只做一次探测：确认 admin 表存在，不存在则给出明确提示。
+  try {
+    await DB(env).prepare("SELECT 1 FROM admin LIMIT 1").first();
+  } catch (e) {
+    throw new Error("数据库表尚未创建，请先在 D1 控制台执行 建表.sql（原始错误：" + (e.message || e) + "）");
   }
   schemaReady = true;
 }
+
+
 
 /* ============================== 客户端接口 ============================== */
 
@@ -367,6 +334,8 @@ async function checkToken(env, token) {
 
 /* ============================== 入口 ============================== */
 
+const BUILD_VERSION = "v4-20261121";
+
 async function guard(env, fn) {
   if (!env.DB) {
     return json({ ok: false, msg: "后端未连接数据库：请在 Pages 项目 Settings → Functions → D1 database bindings 添加变量名 DB（并重新部署）", error: "DB_BINDING_MISSING" }, 500);
@@ -387,6 +356,7 @@ export async function onRequestPost({ request, env }) {
 }
 export async function onRequestGet({ request, env }) {
   const path = new URL(request.url).pathname;
+  if (path === "/api/version") return json({ version: BUILD_VERSION });
   if (path === "/api/notice") return guard(env, () => handleNotice(request, env));
   if (path === "/api/admin") return guard(env, () => handleAdmin(request, env));
   return json({ ok: false, msg: "未知接口" }, 404);
