@@ -34,10 +34,12 @@ function mockD1() {
       };
     },
     async batch(statements) {
+      // 严格跟真实 D1 一致：只接受 {sql, params} 对象
       for (const s of statements) {
-        const sql = typeof s === "string" ? s : s.sql;
-        const params = typeof s === "string" ? [] : (s.params || []);
-        db.prepare(sql).run(...params);
+        if (typeof s === "string" || !s || typeof s.sql !== "string") {
+          throw new Error("Malformed input: should be {sql: string, params?: any[]} or an array of these query objects");
+        }
+        db.prepare(s.sql).run(...(s.params || []));
       }
       return [];
     },
