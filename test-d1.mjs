@@ -33,6 +33,11 @@ function mockD1() {
         async run() { stmt.run(); return { success: true }; },
       };
     },
+    async exec(sqlText) {
+      // 真实 D1 的 exec() 支持多语句分号分隔
+      db.exec(sqlText);
+      return { count: 0, duration: 0 };
+    },
     async batch(statements) {
       // 严格跟真实 D1 一致：只接受 {sql, params} 对象
       for (const s of statements) {
