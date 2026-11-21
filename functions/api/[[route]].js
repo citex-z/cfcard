@@ -38,9 +38,25 @@ async function ensureSchema(env) {
 
 /* ============================== 客户端接口 ============================== */
 
+/**
+ * 取请求参数。网页后台发 multipart/form-data，安卓 App 端发
+ * application/x-www-form-urlencoded；formData() 对后者在个别边缘环境会返回
+ * null，所以留一个手工解析的兜底。
+ */
+async function formOf(request) {
+  const q = await request.formData().catch(() => null);
+  if (q) return q;
+  const ct = request.headers.get("content-type") || "";
+  if (!ct.startsWith("application/x-www-form-urlencoded")) return null;
+  const text = await request.text().catch(() => "");
+  const map = {};
+  new URLSearchParams(text).forEach((v, k) => { map[k] = v; });
+  return { get: k => (k in map ? map[k] : null) };
+}
+
 async function handleVerify(request, env) {
   await ensureSchema(env);
-  const form = await request.formData().catch(() => null);
+  const form = await formOf(request);
   if (!form) return json({ status: "error", message: "请求格式错误" });
   const app_id = (form.get("app_id") || "").trim();
   const card_key = (form.get("card_key") || "").trim();
@@ -72,7 +88,7 @@ async function handleVerify(request, env) {
 
 async function handleCheck(request, env) {
   await ensureSchema(env);
-  const form = await request.formData().catch(() => null);
+  const form = await formOf(request);
   if (!form) return json({ status: "ok" });
   const app_id = (form.get("app_id") || "").trim();
   const sig_cert = form.get("sig_cert") || "";
@@ -109,7 +125,7 @@ async function handleNotice(request, env) {
 
 async function handleAdmin(request, env) {
   await ensureSchema(env);
-  const form = await request.formData().catch(() => null);
+  const form = await formOf(request);
   const q = form || new URL(request.url).searchParams;
   const get = k => (q.get(k) || "").trim();
   const act = get("act");
@@ -209,10 +225,9 @@ async function setAppStatus(env, appId, status) {
 
 async function deleteApp(env, appId) {
   if (!appId) return json({ ok: false, msg: "缺少应用ID" });
-  await DB(env).batch([
-    { sql: "DELETE FROM bindings WHERE app_id = ?", params: [appId] },
-    { sql: "DELETE FROM apps WHERE app_id = ?", params: [appId] },
-  ]);
+  // 不用 batch()：Cloudflare 打包时会丢掉 batch 对象里的 sql 字段
+  await DB(env).prepare("DELETE FROM bindings WHERE app_id = ?").bind(appId).run();
+  await DB(env).prepare("DELETE FROM apps WHERE app_id = ?").bind(appId).run();
   return json({ ok: true, msg: "应用及其卡密已删除" });
 }
 
@@ -334,16 +349,20 @@ async function checkToken(env, token) {
 
 /* ============================== 入口 ============================== */
 
-const BUILD_VERSION = "v4-20261121";
+const BUILD_VERSION = "v5-20261121";
 
+/*
+ * 出错时也返回 HTTP 200，只把错误放进 JSON body：旧的 PHP 后端一直是这个行为，
+ * 安卓 App 端见到 4xx/5xx 会直接抛 "HTTP xxx" 而丢掉具体错误信息。
+ */
 async function guard(env, fn) {
   if (!env.DB) {
-    return json({ ok: false, msg: "后端未连接数据库：请在 Pages 项目 Settings → Functions → D1 database bindings 添加变量名 DB（并重新部署）", error: "DB_BINDING_MISSING" }, 500);
+    return json({ ok: false, msg: "后端未连接数据库：请在 Pages 项目 Settings → Functions → D1 database bindings 添加变量名 DB（并重新部署）", error: "DB_BINDING_MISSING" });
   }
   try {
     return await fn();
   } catch (e) {
-    return json({ ok: false, msg: "服务器内部错误：" + (e && e.message ? e.message : String(e)), error: "INTERNAL" }, 500);
+    return json({ ok: false, msg: "服务器内部错误：" + (e && e.message ? e.message : String(e)), error: "INTERNAL" });
   }
 }
 
