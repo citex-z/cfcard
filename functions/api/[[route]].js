@@ -362,17 +362,28 @@ async function checkToken(env, token) {
 
 /* ============================== 入口 ============================== */
 
+async function guard(env, fn) {
+  if (!env.DB) {
+    return json({ ok: false, msg: "后端未连接数据库：请在 Pages 项目 Settings → Functions → D1 database bindings 添加变量名 DB（并重新部署）", error: "DB_BINDING_MISSING" }, 500);
+  }
+  try {
+    return await fn();
+  } catch (e) {
+    return json({ ok: false, msg: "服务器内部错误：" + (e && e.message ? e.message : String(e)), error: "INTERNAL" }, 500);
+  }
+}
+
 export async function onRequestPost({ request, env }) {
   const path = new URL(request.url).pathname;
-  if (path === "/api/verify") return handleVerify(request, env);
-  if (path === "/api/check") return handleCheck(request, env);
-  if (path === "/api/admin") return handleAdmin(request, env);
+  if (path === "/api/verify") return guard(env, () => handleVerify(request, env));
+  if (path === "/api/check") return guard(env, () => handleCheck(request, env));
+  if (path === "/api/admin") return guard(env, () => handleAdmin(request, env));
   return json({ ok: false, msg: "未知接口" }, 404);
 }
 export async function onRequestGet({ request, env }) {
   const path = new URL(request.url).pathname;
-  if (path === "/api/notice") return handleNotice(request, env);
-  if (path === "/api/admin") return handleAdmin(request, env);
+  if (path === "/api/notice") return guard(env, () => handleNotice(request, env));
+  if (path === "/api/admin") return guard(env, () => handleAdmin(request, env));
   return json({ ok: false, msg: "未知接口" }, 404);
 }
 
