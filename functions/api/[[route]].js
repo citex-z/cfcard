@@ -349,7 +349,7 @@ async function checkToken(env, token) {
 
 /* ============================== 入口 ============================== */
 
-const BUILD_VERSION = "v5-20261121";
+const BUILD_VERSION = "v6-20261121";
 
 /*
  * 出错时也返回 HTTP 200，只把错误放进 JSON body：旧的 PHP 后端一直是这个行为，
@@ -371,14 +371,14 @@ export async function onRequestPost({ request, env }) {
   if (path === "/api/verify") return guard(env, () => handleVerify(request, env));
   if (path === "/api/check") return guard(env, () => handleCheck(request, env));
   if (path === "/api/admin") return guard(env, () => handleAdmin(request, env));
-  return json({ ok: false, msg: "未知接口" }, 404);
+  return json({ ok: false, msg: "未知接口：" + path, error: "NOT_FOUND" });
 }
 export async function onRequestGet({ request, env }) {
   const path = new URL(request.url).pathname;
   if (path === "/api/version") return json({ version: BUILD_VERSION });
   if (path === "/api/notice") return guard(env, () => handleNotice(request, env));
   if (path === "/api/admin") return guard(env, () => handleAdmin(request, env));
-  return json({ ok: false, msg: "未知接口" }, 404);
+  return json({ ok: false, msg: "未知接口：" + path, error: "NOT_FOUND" });
 }
 
 /* ============================== 杂项 ============================== */
