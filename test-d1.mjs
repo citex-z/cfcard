@@ -34,7 +34,7 @@ function mockD1() {
       };
     },
     async exec(sqlText) {
-      // 真实 D1 的 exec() 支持多语句分号分隔
+      // 真实 D1 的 exec() 只执行单条语句，分号分隔的多语句会报 incomplete input
       db.exec(sqlText);
       return { count: 0, duration: 0 };
     },
