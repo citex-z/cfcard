@@ -62,8 +62,10 @@ async function ensureSchema(env) {
     `CREATE INDEX IF NOT EXISTS idx_bindings_app ON bindings(app_id)`,
     `CREATE INDEX IF NOT EXISTS idx_bindings_key ON bindings(app_id, card_key)`,
   ];
-  // 用 exec() 一次执行多条 DDL，避免 batch() 的参数校验问题
-  await DB(env).exec(statements.join(";\n"));
+  // D1 的 exec() 一次只认一条语句，逐条执行
+  for (const sql of statements) {
+    await DB(env).exec(sql);
+  }
   schemaReady = true;
 }
 
