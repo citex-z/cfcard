@@ -24,7 +24,8 @@ const TOKEN_TTL = 86400 * 30;
 let schemaReady = false;
 async function ensureSchema(env) {
   if (schemaReady) return;
-  await DB(env).batch([
+  // 注意：D1 的 batch() 只接受 {sql, params} 对象，不能直接传字符串
+  const statements = [
     `CREATE TABLE IF NOT EXISTS admin (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
        username TEXT NOT NULL UNIQUE,
@@ -60,7 +61,8 @@ async function ensureSchema(env) {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_bindings_app ON bindings(app_id)`,
     `CREATE INDEX IF NOT EXISTS idx_bindings_key ON bindings(app_id, card_key)`,
-  ]);
+  ].map(sql => ({ sql, params: [] }));
+  await DB(env).batch(statements);
   schemaReady = true;
 }
 
