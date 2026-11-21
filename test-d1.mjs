@@ -67,11 +67,19 @@ function clientReq(path, params) {
 }
 const j = async r => await r.json();
 
-console.log("\n[1] 管理员初始化 & 登录（先手动建表+插管理员）");
+console.log("\n[1] 管理员初始化 & 登录");
 import { hashPassword } from "./functions/lib/password.js";
+const SCHEMA = `
+CREATE TABLE admin (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE apps (app_id TEXT PRIMARY KEY, app_name TEXT NOT NULL, status INTEGER DEFAULT 1, notice TEXT DEFAULT '', sig_md5 TEXT DEFAULT '', sig_sha1 TEXT DEFAULT '', sig_sha256 TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE bindings (id INTEGER PRIMARY KEY AUTOINCREMENT, app_id TEXT NOT NULL DEFAULT '', card_key TEXT NOT NULL, device_id TEXT DEFAULT '', bind_date TEXT DEFAULT '', banned INTEGER DEFAULT 0, expiry_date TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE api_tokens (token_hash TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
+CREATE INDEX idx_bindings_app ON bindings(app_id);
+CREATE INDEX idx_bindings_key ON bindings(app_id, card_key);
+`;
 {
-  // 触发建表
-  await onRequestPost({ request: adminReq({ act: "ping", token: "x" }), env });
+  // 手动建表（生产环境由 D1 控制台执行 建表.sql）
+  await env.DB.exec(SCHEMA);
   const { salt, hash } = await hashPassword("admin123");
   await env.DB.prepare("INSERT INTO admin (username, password_hash, salt) VALUES (?, ?, ?)").bind("boss", hash, salt).run();
   const r = await j(await onRequestPost({ request: adminReq({ act: "login", username: "boss", password: "admin123" }), env }));
